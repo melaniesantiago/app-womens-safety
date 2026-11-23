@@ -83,7 +83,7 @@ export default function ActiveAlertScreen({ navigation }) {
             </View>
             <View style={styles.timelineContent}>
               <Text style={styles.stepTitle}>Enviada desde la pulsera</Text>
-              <Text style={styles.stepSub}>18:32 · vía LoRa / SMS Respaldo</Text>
+              <Text style={styles.stepSub}>18:32 · vía SMS </Text>
             </View>
           </View>
 

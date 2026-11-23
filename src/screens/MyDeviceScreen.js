@@ -283,8 +283,8 @@ export default function MyDeviceScreen({ navigation }) {
           </View>
 
           <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Enlace</Text>
-            <Text style={styles.infoValue}>LoRa · 915 MHz</Text>
+            <Text style={styles.infoLabel}>Conexión</Text>
+            <Text style={styles.infoValue}>Red móvil</Text>
           </View>
 
           <View style={styles.infoCard}>

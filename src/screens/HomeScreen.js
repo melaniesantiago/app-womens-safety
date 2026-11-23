@@ -125,7 +125,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
           </View>
           <View style={styles.braceletInfo}>
             <Text style={styles.braceletTitle}>Mi pulsera</Text>
-            <Text style={styles.braceletSub}>Batería 82 % • LoRa • GPS fijo</Text>
+            <Text style={styles.braceletSub}>Batería 82 % • Red móvil • GPS fijo</Text>
             <Text style={styles.view3dText}>Ver en 3D</Text>
           </View>
           <View style={styles.connectedChip}>
@@ -155,7 +155,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               <View style={styles.ecgLine} />
             </View>
 
-            <Text style={styles.cardFooterText}>GPS, LoRa, voz y más</Text>
+            <Text style={styles.cardFooterText}>GPS, Red móvil, voz y más</Text>
           </TouchableOpacity>
 
           {/* Card Última Alerta */}
