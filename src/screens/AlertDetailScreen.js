@@ -220,7 +220,7 @@ export default function AlertDetailScreen({ navigation }) {
             </thead>
             <tbody>
               <tr><td><strong>18:32:07</strong></td><td>Señal de emergencia activada por la usuaria</td><td>Botón Estrella (SafeWave Band)</td></tr>
-              <tr><td><strong>18:32:09</strong></td><td>Recepción de paquetes de telemetría y GPS</td><td>Enlace LoRaWAN · 2 s</td></tr>
+              <tr><td><strong>18:32:09</strong></td><td>Recepción de paquetes de telemetría y GPS</td><td>Enlace SMS · 2 s</td></tr>
               <tr><td><strong>18:33:12</strong></td><td>Despliegue de red de apoyo municipal</td><td>Central de Monitoreo Tlahuelilpan</td></tr>
               <tr><td><strong>18:34:07</strong></td><td>Atención presencial completada con éxito</td><td>Instancia Municipal de la Mujer</td></tr>
             </tbody>
@@ -487,7 +487,7 @@ export default function AlertDetailScreen({ navigation }) {
 
           <View style={styles.gridCard}>
             <Text style={styles.gridLabel}>Enlace</Text>
-            <Text style={styles.gridValue}>LoRa · llegó en 2 s</Text>
+            <Text style={styles.gridValue}>Red móvil · llegó en 2 s</Text>
           </View>
 
           <View style={styles.gridCard}>
