@@ -14,52 +14,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
-export default function ContactsScreen({ navigation }) {
+export default function ContactsScreen({ navigation, contacts = [], setContacts }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [editingContactId, setEditingContactId] = useState(null);
 
-  // Contactos de la Red de Confianza
-  // Agrega el número de tu mamá en 'phone' (ej: '7711234567') para ir directo a su chat
-  const [contacts, setContacts] = useState([
-    {
-      id: '1',
-      name: 'Mamá',
-      phone: '', // <--- Pon aquí su número de 10 dígitos para ir directo a su chat
-      channel: 'SMS y llamada',
-      status: 'Aceptó',
-      statusType: 'accepted',
-      avatarColor: '#521841',
-      initials: 'M',
-      liveLocation: true,
-    },
-    {
-      id: '2',
-      name: 'Valeria',
-      phone: '',
-      channel: 'WhatsApp',
-      status: 'Aceptó',
-      statusType: 'accepted',
-      avatarColor: '#0D7A68',
-      initials: 'V',
-      liveLocation: true,
-    },
-    {
-      id: '3',
-      name: 'Diego (hermano)',
-      phone: '',
-      channel: 'Notificación en la app',
-      status: 'Pendiente',
-      statusType: 'pending',
-      avatarColor: '#8C4A00',
-      initials: 'D',
-      liveLocation: false,
-    },
-  ]);
+  // Respaldo local por si se abre la pantalla de forma aislada sin props
+  const [localContacts, setLocalContacts] = useState([]);
+  const activeContacts = setContacts ? contacts : localContacts;
+  const updateContacts = setContacts || setLocalContacts;
 
   // Cambiar visibilidad de ubicación
   const toggleLiveLocation = (id) => {
-    setContacts(prev =>
+    updateContacts(prev =>
       prev.map(item => {
         if (item.id === id) {
           const nextLocationState = !item.liveLocation;
@@ -89,17 +57,55 @@ export default function ContactsScreen({ navigation }) {
           text: 'Eliminar', 
           style: 'destructive',
           onPress: () => {
-            setContacts(prev => prev.filter(c => c.id !== id));
+            updateContacts(prev => prev.filter(c => c.id !== id));
           }
         }
       ]
     );
   };
 
-  // Guardar nuevo contacto
+  // Abrir modal para agregar nuevo contacto
+  const openAddModal = () => {
+    if (activeContacts.length >= 5) {
+      Alert.alert('Límite alcanzado', 'Has llegado al límite máximo de 5 contactos.');
+      return;
+    }
+    setEditingContactId(null);
+    setNewContactName('');
+    setNewContactPhone('');
+    setModalVisible(true);
+  };
+
+  // Guardar nuevo contacto o actualizar teléfono
   const handleSaveNewContact = () => {
     if (!newContactName.trim()) {
       Alert.alert('Atención', 'Por favor ingresa el nombre o parentesco de tu contacto.');
+      return;
+    }
+
+    const cleanPhone = newContactPhone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length < 10) {
+      Alert.alert('Número incompleto', 'Ingresa un número de WhatsApp válido de 10 dígitos.');
+      return;
+    }
+
+    if (editingContactId) {
+      updateContacts(prev =>
+        prev.map(c =>
+          c.id === editingContactId
+            ? {
+                ...c,
+                name: newContactName.trim(),
+                phone: cleanPhone,
+                initials: newContactName.trim().charAt(0).toUpperCase(),
+              }
+            : c
+        )
+      );
+      setEditingContactId(null);
+      setNewContactName('');
+      setNewContactPhone('');
+      setModalVisible(false);
       return;
     }
 
@@ -110,7 +116,7 @@ export default function ContactsScreen({ navigation }) {
     const newEntry = {
       id: Date.now().toString(),
       name: newContactName.trim(),
-      phone: newContactPhone.trim(),
+      phone: cleanPhone,
       channel: 'WhatsApp',
       status: 'Aceptó',
       statusType: 'accepted',
@@ -119,7 +125,7 @@ export default function ContactsScreen({ navigation }) {
       liveLocation: true,
     };
 
-    setContacts(prev => [...prev, newEntry]);
+    updateContacts(prev => [...prev, newEntry]);
     setNewContactName('');
     setNewContactPhone('');
     setModalVisible(false);
@@ -127,33 +133,19 @@ export default function ContactsScreen({ navigation }) {
     Alert.alert('¡Contacto Agregado!', `${newEntry.name} se añadió a tu Red de Confianza.`);
   };
 
-  // APERTURA DIRECTA AL CHAT PRIVADO DEL CONTACTO CON MENSAJE PRE-CARGADO
+  // Apertura directa al chat privado de WhatsApp (compatible con Android e iOS)
   const handleOpenDirectChat = async (contact) => {
-    let rawPhone = contact.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+    const rawPhone = contact.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
 
-    // Si el contacto no tiene número guardado, lo pide rápidamente
     if (!rawPhone) {
-      Alert.prompt(
-        `Número de ${contact.name}`,
-        'Ingresa el número de WhatsApp a 10 dígitos para ir directo a su chat:',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Ir a WhatsApp',
-            onPress: (inputPhone) => {
-              if (inputPhone) {
-                // Actualiza el contacto en el estado para recordar su número
-                setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, phone: inputPhone } : c));
-                sendWhatsAppToPhone(inputPhone, contact.name);
-              }
-            }
-          }
-        ],
-        'plain-text'
-      );
-    } else {
-      sendWhatsAppToPhone(rawPhone, contact.name);
+      setEditingContactId(contact.id);
+      setNewContactName(contact.name);
+      setNewContactPhone('');
+      setModalVisible(true);
+      return;
     }
+
+    sendWhatsAppToPhone(rawPhone, contact.name);
   };
 
   const sendWhatsAppToPhone = async (phoneNumber, name) => {
@@ -171,7 +163,6 @@ export default function ContactsScreen({ navigation }) {
       const mapsUrl = `https://maps.google.com/?q=${lat},${lon}`;
       const textMessage = `🚨 *ALERTA SAFEWAVE* 🚨\n¡Hola ${name}! Te comparto mi ubicación exacta en tiempo real:\n${mapsUrl}`;
 
-      // Formatear para México (+52) si tiene 10 dígitos
       let cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
       if (cleanPhone.length === 10) {
         cleanPhone = `52${cleanPhone}`;
@@ -199,7 +190,7 @@ export default function ContactsScreen({ navigation }) {
         {/* Encabezado */}
         <Text style={styles.title}>Red de confianza</Text>
         <Text style={styles.subtitle}>
-          Reciben tus alertas. Puedes tener hasta 5 contactos.
+          Reciben tus alertas. Puedes tener hasta 5 contactos ({activeContacts.length}/5).
         </Text>
 
         {/* Tarjeta Institucional */}
@@ -216,87 +207,90 @@ export default function ContactsScreen({ navigation }) {
           <Ionicons name="lock-closed-outline" size={18} color="#521841" style={styles.lockIcon} />
         </View>
 
-        {/* Lista de Contactos */}
-        {contacts.map((contact) => (
-          <View key={contact.id} style={styles.contactCard}>
-            
-            {/* Toca para abrir directamente el chat de este contacto */}
-            <TouchableOpacity 
-              style={styles.contactHeader}
-              activeOpacity={0.7}
-              onPress={() => handleOpenDirectChat(contact)}
-            >
-              <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
-                <Text style={styles.avatarText}>{contact.initials}</Text>
-              </View>
-
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{contact.name}</Text>
-                <Text style={styles.contactChannel}>
-                  {contact.phone ? `Tel: ${contact.phone}` : 'Toca para registrar número y enviar'}
-                </Text>
-              </View>
-
-              <View style={[
-                styles.statusBadge, 
-                contact.statusType === 'accepted' ? styles.badgeAccepted : styles.badgePending
-              ]}>
-                <Text style={[
-                  styles.statusText, 
-                  contact.statusType === 'accepted' ? styles.textAccepted : styles.textPending
-                ]}>
-                  {contact.status}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.locationRow}>
-              <TouchableOpacity 
-                style={styles.checkboxTouch} 
-                activeOpacity={0.7}
-                onPress={() => toggleLiveLocation(contact.id)}
-              >
-                <MaterialCommunityIcons 
-                  name={contact.liveLocation ? "checkbox-marked" : "checkbox-blank-outline"} 
-                  size={22} 
-                  color={contact.liveLocation ? "#521841" : "#94A3B8"} 
-                />
-                <Text style={styles.locationText}>Ver mi ubicación en vivo</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.deleteBtn}
-                onPress={() => handleDeleteContact(contact.id, contact.name)}
-              >
-                <Feather name="trash-2" size={18} color="#EF4444" />
-              </TouchableOpacity>
+        {/* Estado vacío cuando la usuaria aún no agrega contactos */}
+        {activeContacts.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="people-outline" size={30} color="#521841" />
             </View>
-
+            <Text style={styles.emptyTitle}>Tu red de confianza está vacía</Text>
+            <Text style={styles.emptySub}>
+              Agrega a familiares o personas de confianza para compartirles tu ubicación en vivo y alertas SOS.
+            </Text>
           </View>
-        ))}
+        ) : (
+          activeContacts.map((contact) => (
+            <View key={contact.id} style={styles.contactCard}>
+              
+              {/* Toca para abrir directamente el chat de este contacto */}
+              <TouchableOpacity 
+                style={styles.contactHeader}
+                activeOpacity={0.7}
+                onPress={() => handleOpenDirectChat(contact)}
+              >
+                <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
+                  <Text style={styles.avatarText}>{contact.initials}</Text>
+                </View>
+
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactName}>{contact.name}</Text>
+                  <Text style={styles.contactChannel}>
+                    {contact.phone ? `WhatsApp: ${contact.phone}` : 'Toca para registrar número'}
+                  </Text>
+                </View>
+
+                <View style={[
+                  styles.statusBadge, 
+                  contact.statusType === 'accepted' ? styles.badgeAccepted : styles.badgePending
+                ]}>
+                  <Text style={[
+                    styles.statusText, 
+                    contact.statusType === 'accepted' ? styles.textAccepted : styles.textPending
+                  ]}>
+                    {contact.status}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={styles.locationRow}>
+                <TouchableOpacity 
+                  style={styles.checkboxTouch} 
+                  activeOpacity={0.7}
+                  onPress={() => toggleLiveLocation(contact.id)}
+                >
+                  <MaterialCommunityIcons 
+                    name={contact.liveLocation ? "checkbox-marked" : "checkbox-blank-outline"} 
+                    size={22} 
+                    color={contact.liveLocation ? "#521841" : "#94A3B8"} 
+                  />
+                  <Text style={styles.locationText}>Ver mi ubicación en vivo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.deleteBtn}
+                  onPress={() => handleDeleteContact(contact.id, contact.name)}
+                >
+                  <Feather name="trash-2" size={18} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+
+            </View>
+          ))
+        )}
 
         {/* Botón Agregar Contacto */}
-        <TouchableOpacity 
-          style={styles.addButton} 
-          onPress={() => {
-            if (contacts.length >= 5) {
-              Alert.alert('Límite alcanzado', 'Has llegado al límite máximo de 5 contactos.');
-            } else {
-              setModalVisible(true);
-            }
-          }}
-        >
+        <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
           <Feather name="plus" size={20} color="#521841" style={styles.addIcon} />
           <Text style={styles.addButtonText}>Agregar contacto</Text>
         </TouchableOpacity>
 
         <Text style={styles.helperText}>
-          Le enviaremos una invitación. Solo queda activo cuando la acepta.
+          Tus contactos registrados recibirán tu ubicación exacta cuando actives una alerta o trayecto.
         </Text>
 
       </ScrollView>
 
-      {/* Modal Agregar Contacto */}
+      {/* Modal Agregar / Editar Contacto */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -305,7 +299,9 @@ export default function ContactsScreen({ navigation }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Agregar Contacto de Confianza</Text>
+            <Text style={styles.modalTitle}>
+              {editingContactId ? 'Actualizar Contacto' : 'Agregar Contacto de Confianza'}
+            </Text>
             <Text style={styles.modalSub}>
               Ingresa el nombre y número a 10 dígitos para enviar alertas directo a su chat.
             </Text>
@@ -313,7 +309,7 @@ export default function ContactsScreen({ navigation }) {
             <Text style={styles.inputLabel}>Nombre / Parentesco</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Ej. Abuela Elena, Hermana Sofía..."
+              placeholder="Ej. Mamá, Hermana Sofía..."
               placeholderTextColor="#94A3B8"
               value={newContactName}
               onChangeText={setNewContactName}
@@ -325,6 +321,7 @@ export default function ContactsScreen({ navigation }) {
               placeholder="Ej. 7711234567"
               placeholderTextColor="#94A3B8"
               keyboardType="phone-pad"
+              maxLength={10}
               value={newContactPhone}
               onChangeText={setNewContactPhone}
             />
@@ -332,7 +329,10 @@ export default function ContactsScreen({ navigation }) {
             <View style={styles.modalActions}>
               <TouchableOpacity 
                 style={styles.cancelBtn} 
-                onPress={() => setModalVisible(false)}
+                onPress={() => {
+                  setEditingContactId(null);
+                  setModalVisible(false);
+                }}
               >
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
@@ -348,11 +348,11 @@ export default function ContactsScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* TabBar Inferior Alineado */}
+      {/* TabBar Inferior Alineado y Corregido */}
       <View style={styles.bottomNav}>
         <TouchableOpacity 
           style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'InicioTab' })}
+          onPress={() => navigation?.navigate('InicioTab')}
         >
           <Ionicons name="home-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Inicio</Text>
@@ -360,7 +360,7 @@ export default function ContactsScreen({ navigation }) {
 
         <TouchableOpacity 
           style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'MapaDeApoyo' })}
+          activeOpacity={1}
         >
           <Ionicons name="people" size={24} color="#521841" />
           <Text style={[styles.navText, styles.navTextActive]}>Contactos</Text>
@@ -368,7 +368,7 @@ export default function ContactsScreen({ navigation }) {
 
         <TouchableOpacity 
           style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'MapaDeApoyo' })}
+          onPress={() => navigation?.navigate('AccompaniTab')}
         >
           <Ionicons name="location-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Acompáñame</Text>
@@ -376,7 +376,7 @@ export default function ContactsScreen({ navigation }) {
 
         <TouchableOpacity 
           style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'HistorialTab' })}
+          onPress={() => navigation?.navigate('HistorialTab')}
         >
           <Ionicons name="bookmark-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Recursos</Text>
@@ -415,6 +415,27 @@ const styles = StyleSheet.create({
   instSub: { fontSize: 12, color: '#64748B', marginTop: 2, lineHeight: 16 },
   lockIcon: { opacity: 0.7 },
 
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+  },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F3E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  emptySub: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 19 },
+
   contactCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
@@ -434,7 +455,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
@@ -452,7 +473,7 @@ const styles = StyleSheet.create({
 
   locationRow: {
     flexDirection: 'row',
-    justify: 'space-between',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 12,
   },
@@ -465,7 +486,7 @@ const styles = StyleSheet.create({
 
   addButton: {
     flexDirection: 'row',
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
@@ -484,7 +505,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
@@ -523,7 +544,7 @@ const styles = StyleSheet.create({
     height: 68,
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
-    justify: 'space-around',
+    justifyContent: 'space-around',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
@@ -532,7 +553,7 @@ const styles = StyleSheet.create({
   navItem: { 
     flex: 1,
     alignItems: 'center', 
-    justify: 'center',
+    justifyContent: 'center',
     paddingVertical: 6,
   },
   navText: { 
