@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { api } from '../api/cliente';
 
 const AVATAR_ICONS = [
   { id: 'person', label: 'Clásico' },
@@ -25,6 +26,31 @@ const AVATAR_ICONS = [
 
 export default function HomeScreen({ user, setUser, onLogout }) {
   const navigation = useNavigation();
+
+    // Datos en vivo de la pulsera desde la página
+  const [pulsera, setPulsera] = useState(null);
+  const [servidorOk, setServidorOk] = useState(false);
+
+  useEffect(() => {
+    let activo = true;
+    const cargar = async () => {
+      try {
+        const data = await api('/api/app/estado');
+        if (!activo) return;
+        setPulsera(data.usuaria);
+        setServidorOk(data.conectado);
+      } catch (e) {
+        if (activo) setServidorOk(false);
+      }
+    };
+    cargar();
+    const id = setInterval(cargar, 5000);
+    return () => { activo = false; clearInterval(id); };
+  }, []);
+
+  // La pulsera está en línea si mandó datos en el último minuto
+  const enLinea = servidorOk && pulsera?.ultimaLectura > 0 &&
+    Date.now() - pulsera.ultimaLectura < 60000;
 
   // Estados para editar el perfil
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
@@ -115,8 +141,8 @@ export default function HomeScreen({ user, setUser, onLogout }) {
           </View>
         </TouchableOpacity>
 
-        {/* Card Mi Pulsera */}
-        <TouchableOpacity 
+        z{/* Card Mi Pulsera */}
+        <TouchableOpacity
           style={styles.myBraceletCard}
           onPress={() => navigation?.navigate('MyDevice')}
         >
@@ -125,12 +151,14 @@ export default function HomeScreen({ user, setUser, onLogout }) {
           </View>
           <View style={styles.braceletInfo}>
             <Text style={styles.braceletTitle}>Mi pulsera</Text>
-            <Text style={styles.braceletSub}>Batería 82 % • Red móvil • GPS fijo</Text>
+            <Text style={styles.braceletSub}>
+              {pulsera?.bat ? `Batería ${pulsera.bat} %` : 'Batería --'} • Red móvil • {enLinea && pulsera?.lat ? 'GPS fijo' : 'Sin GPS'}
+            </Text>
             <Text style={styles.view3dText}>Ver en 3D</Text>
           </View>
           <View style={styles.connectedChip}>
-            <View style={styles.greenDot} />
-            <Text style={styles.connectedText}>Conectada</Text>
+            <View style={[styles.greenDot, !enLinea && { backgroundColor: '#9CA3AF' }]} />
+            <Text style={styles.connectedText}>{enLinea ? 'Conectada' : 'Sin conexión'}</Text>
           </View>
         </TouchableOpacity>
 
@@ -147,7 +175,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               <Text style={styles.cardCategoryTitleRed}>Sensores</Text>
             </View>
             <View style={styles.bpmRow}>
-              <Text style={styles.bpmNumber}>76</Text>
+              <Text style={styles.bpmNumber}>{pulsera?.pulso || '--'}</Text>
               <Text style={styles.bpmUnit}>lpm</Text>
             </View>
 
