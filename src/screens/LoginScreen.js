@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +18,24 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
   const [password, setPassword] = useState('');
 
   const handleLoginPress = () => {
-    onLogin({ email: email.trim() });
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail) {
+      Alert.alert('Correo requerido', 'Por favor ingresa tu correo electrónico para continuar.');
+      return;
+    }
+
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      Alert.alert('Correo no válido', 'Ingresa un correo electrónico válido (ejemplo@correo.com).');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('Contraseña requerida', 'Por favor ingresa tu contraseña.');
+      return;
+    }
+
+    onLogin({ email: cleanEmail });
   };
 
   return (

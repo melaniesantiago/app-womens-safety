@@ -1,27 +1,101 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, 
   Text, 
   View, 
   TouchableOpacity, 
-  ScrollView 
+  ScrollView,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 
-export default function HomeScreen({ navigation }) {
+const AVATAR_ICONS = [
+  { id: 'person', label: 'Clásico' },
+  { id: 'shield-checkmark', label: 'Protegida' },
+  { id: 'heart', label: 'Cuidado' },
+  { id: 'sparkles', label: 'Estrella' },
+  { id: 'flower', label: 'Flor' }
+];
+
+export default function HomeScreen({ user, setUser, onLogout }) {
+  const navigation = useNavigation();
+
+  // Estados para editar el perfil
+  const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
+  const [editName, setEditName] = useState(user?.name || '');
+  const [editEmail, setEditEmail] = useState(user?.email || '');
+  const [editAvatar, setEditAvatar] = useState(user?.avatarIcon || 'person');
+
+  // Sincronizar campos cuando cambia el usuario
+  useEffect(() => {
+    setEditName(user?.name || '');
+    setEditEmail(user?.email || '');
+    setEditAvatar(user?.avatarIcon || 'person');
+  }, [user]);
+
+  // Muestra el nombre de la usuaria (ej. "Melisanresendiz" o el nombre editado)
+  const displayName = user?.name ? user.name.trim().split(' ')[0] : 'Usuaria';
+  const currentAvatar = user?.avatarIcon || 'person';
+
+  // Fecha actual formateada en español
+  const getFormattedDate = () => {
+    const meses = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const hoy = new Date();
+    return `${dias[hoy.getDay()]} ${hoy.getDate()} de ${meses[hoy.getMonth()]}`;
+  };
+
+  // Guardar cambios de perfil en el estado global
+  const handleSaveProfile = () => {
+    if (!editName.trim()) {
+      Alert.alert('Nombre requerido', 'Por favor escribe tu nombre para actualizar tu perfil.');
+      return;
+    }
+
+    if (setUser) {
+      setUser(prev => ({
+        ...prev,
+        name: editName.trim(),
+        email: editEmail.trim() || prev?.email,
+        avatarIcon: editAvatar
+      }));
+    }
+
+    setIsProfileModalVisible(false);
+    Alert.alert('Perfil actualizado 💜', 'Tus datos se han guardado correctamente.');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Header */}
+        {/* Header con Botón de Perfil en la esquina superior derecha */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.dateText}>Jueves 5 de noviembre</Text>
-            <Text style={styles.welcomeText}>Hola, Lucía</Text>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Text style={styles.dateText}>{getFormattedDate()}</Text>
+            <Text style={styles.welcomeText} numberOfLines={1}>
+              Hola, {displayName}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.filterButton}>
-            <Ionicons name="options-outline" size={20} color="#1E293B" />
+
+          <TouchableOpacity 
+            style={styles.profileButton} 
+            activeOpacity={0.8}
+            onPress={() => setIsProfileModalVisible(true)}
+          >
+            <View style={styles.profileAvatarCircle}>
+              <Ionicons name={currentAvatar} size={18} color="#FFFFFF" />
+            </View>
+            <Text style={styles.profileBtnLabel}>Perfil</Text>
           </TouchableOpacity>
         </View>
 
@@ -29,7 +103,7 @@ export default function HomeScreen({ navigation }) {
         <TouchableOpacity 
           style={styles.panicButton}
           activeOpacity={0.88}
-          onLongPress={() => navigation?.navigate('AlertActive')}
+          onLongPress={() => navigation?.navigate('ActiveAlert')}
           delayLongPress={3000}
         >
           <View style={styles.alertIconCircle}>
@@ -66,7 +140,7 @@ export default function HomeScreen({ navigation }) {
           {/* Card Sensores */}
           <TouchableOpacity 
             style={styles.gridCard}
-            onPress={() => navigation?.navigate('Sensors')}
+            onPress={() => navigation?.navigate('Telemetry')}
           >
             <View style={styles.cardHeaderRow}>
               <Ionicons name="heart-outline" size={18} color="#C5221F" />
@@ -77,11 +151,8 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.bpmUnit}>lpm</Text>
             </View>
 
-            {/* Simulación Gráfica ECG */}
             <View style={styles.ecgContainer}>
               <View style={styles.ecgLine} />
-              <View style={styles.ecgPeak} />
-              <View style={styles.ecgLineShort} />
             </View>
 
             <Text style={styles.cardFooterText}>GPS, LoRa, voz y más</Text>
@@ -90,7 +161,7 @@ export default function HomeScreen({ navigation }) {
           {/* Card Última Alerta */}
           <TouchableOpacity 
             style={styles.gridCard}
-            onPress={() => navigation?.navigate('LastAlert')}
+            onPress={() => navigation?.navigate('AlertDetail')}
           >
             <View style={styles.cardHeaderRow}>
               <Ionicons name="time-outline" size={18} color="#4C1D95" />
@@ -106,7 +177,7 @@ export default function HomeScreen({ navigation }) {
           {/* Card Acompáñame */}
           <TouchableOpacity 
             style={styles.gridCard}
-            onPress={() => navigation?.navigate('Escort')}
+            onPress={() => navigation?.navigate('AccompaniTab')}
           >
             <Ionicons name="location-outline" size={22} color="#4C1D95" style={{ marginBottom: 8 }} />
             <Text style={styles.cardMainTitle}>Acompáñame</Text>
@@ -114,7 +185,10 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Card Probar Alerta */}
-          <TouchableOpacity style={styles.gridCard}>
+          <TouchableOpacity 
+            style={styles.gridCard}
+            onPress={() => navigation?.navigate('ActiveAlert')}
+          >
             <MaterialCommunityIcons name="pulse" size={22} color="#4C1D95" style={{ marginBottom: 8 }} />
             <Text style={styles.cardMainTitle}>Probar alerta</Text>
             <Text style={styles.cardFooterText}>Modo práctica</Text>
@@ -125,7 +199,7 @@ export default function HomeScreen({ navigation }) {
         {/* Contactos de Confianza */}
         <TouchableOpacity 
           style={styles.contactsCard}
-          onPress={() => navigation?.navigate('Contacts')}
+          onPress={() => navigation?.navigate('ContactosTab')}
         >
           <View style={styles.avatarGroup}>
             <View style={[styles.avatarCircle, { backgroundColor: '#4C1D95' }]}>
@@ -149,22 +223,128 @@ export default function HomeScreen({ navigation }) {
 
       </ScrollView>
 
+      {/* ===================================================================== */}
+      {/* MODAL PARA EDITAR PERFIL DE LA USUARIA                                */}
+      {/* ===================================================================== */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isProfileModalVisible}
+        onRequestClose={() => setIsProfileModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalSheet}>
+            
+            {/* Encabezado Modal */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Mi Perfil</Text>
+              <TouchableOpacity onPress={() => setIsProfileModalVisible(false)}>
+                <Ionicons name="close-circle" size={28} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Avatar Grande */}
+            <View style={styles.largeAvatarContainer}>
+              <View style={styles.largeAvatarCircle}>
+                <Ionicons name={editAvatar} size={36} color="#FFFFFF" />
+              </View>
+              <Text style={styles.avatarHint}>Elige tu ícono de perfil</Text>
+
+              {/* Selector de íconos */}
+              <View style={styles.iconSelectorRow}>
+                {AVATAR_ICONS.map((item) => {
+                  const isSelected = editAvatar === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.iconChoiceBtn, isSelected && styles.iconChoiceBtnSelected]}
+                      onPress={() => setEditAvatar(item.id)}
+                    >
+                      <Ionicons 
+                        name={item.id} 
+                        size={20} 
+                        color={isSelected ? '#FFFFFF' : '#521841'} 
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Campo Nombre */}
+            <Text style={styles.inputLabel}>Nombre completo</Text>
+            <View style={styles.inputBox}>
+              <Ionicons name="person-outline" size={18} color="#521841" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.textInput}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Tu nombre completo"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            {/* Campo Correo */}
+            <Text style={styles.inputLabel}>Correo electrónico</Text>
+            <View style={styles.inputBox}>
+              <Ionicons name="mail-outline" size={18} color="#521841" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.textInput}
+                value={editEmail}
+                onChangeText={setEditEmail}
+                placeholder="ejemplo@correo.com"
+                placeholderTextColor="#94A3B8"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Botón Guardar Cambios */}
+            <TouchableOpacity 
+              style={styles.saveProfileBtn} 
+              activeOpacity={0.85}
+              onPress={handleSaveProfile}
+            >
+              <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.saveProfileBtnText}>Guardar cambios</Text>
+            </TouchableOpacity>
+
+            {/* Botón Cerrar Sesión */}
+            <TouchableOpacity 
+              style={styles.logoutBtn} 
+              activeOpacity={0.8}
+              onPress={() => {
+                setIsProfileModalVisible(false);
+                if (onLogout) onLogout();
+              }}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#B91C1C" style={{ marginRight: 6 }} />
+              <Text style={styles.logoutBtnText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Navegación Inferior */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Ionicons name="home-outline" size={22} color="#4C1D95" />
+        <TouchableOpacity style={styles.navItem} activeOpacity={1}>
+          <Ionicons name="home" size={22} color="#521841" />
           <Text style={[styles.navText, styles.navActive]}>Inicio</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('Contacts')}>
-          <Ionicons name="people-outline" size={22} color="#64748B" />
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('ContactosTab')}>
+          <Ionicons name="people-outline" size={22} color="#9E8697" />
           <Text style={styles.navText}>Contactos</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('Escort')}>
-          <Ionicons name="location-outline" size={22} color="#64748B" />
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('AccompaniTab')}>
+          <Ionicons name="location-outline" size={22} color="#9E8697" />
           <Text style={styles.navText}>Acompáñame</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('Resources')}>
-          <Ionicons name="bookmark-outline" size={22} color="#64748B" />
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('HistorialTab')}>
+          <Ionicons name="bookmark-outline" size={22} color="#9E8697" />
           <Text style={styles.navText}>Recursos</Text>
         </TouchableOpacity>
       </View>
@@ -178,8 +358,35 @@ const styles = StyleSheet.create({
   
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   dateText: { fontSize: 14, color: '#64748B', fontWeight: '500' },
-  welcomeText: { fontSize: 28, fontWeight: '800', color: '#0F172A' },
-  filterButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  welcomeText: { fontSize: 24, fontWeight: '800', color: '#0F172A' },
+  
+  // Botón de Perfil en esquina superior derecha
+  profileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 1,
+  },
+  profileAvatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#521841',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  profileBtnLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#521841',
+  },
 
   // Botón Rojo
   panicButton: {
@@ -237,7 +444,6 @@ const styles = StyleSheet.create({
   bpmNumber: { fontSize: 24, fontWeight: '800', color: '#0F172A' },
   bpmUnit: { fontSize: 13, fontWeight: '600', color: '#0F172A', marginLeft: 4 },
   
-  // ECG
   ecgContainer: { height: 16, justifyContent: 'center', marginVertical: 4 },
   ecgLine: { height: 2, backgroundColor: '#C5221F', width: '100%' },
 
@@ -265,21 +471,103 @@ const styles = StyleSheet.create({
   contactsTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
   contactsSub: { fontSize: 12, color: '#64748B', marginTop: 2 },
 
+  // Modal Editar Perfil
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 34,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '900', color: '#0F172A' },
+  largeAvatarContainer: { alignItems: 'center', marginBottom: 18 },
+  largeAvatarCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#521841',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  avatarHint: { fontSize: 12, color: '#64748B', fontWeight: '600', marginBottom: 10 },
+  iconSelectorRow: { flexDirection: 'row', justifyContent: 'center' },
+  iconChoiceBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 6,
+  },
+  iconChoiceBtnSelected: {
+    backgroundColor: '#521841',
+  },
+  inputLabel: { fontSize: 12, fontWeight: '700', color: '#380E2B', marginBottom: 6, marginLeft: 2 },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 14,
+  },
+  textInput: { flex: 1, fontSize: 14, color: '#0F172A', fontWeight: '600' },
+  saveProfileBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#521841',
+    borderRadius: 16,
+    paddingVertical: 14,
+    marginTop: 6,
+  },
+  saveProfileBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  logoutBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    paddingVertical: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  logoutBtnText: { color: '#B91C1C', fontSize: 14, fontWeight: '700' },
+
   // Bottom Nav
   bottomNav: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 65,
+    height: 68,
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0'
+    borderTopColor: '#E2E8F0',
+    paddingBottom: 4,
   },
-  navItem: { alignItems: 'center' },
-  navText: { fontSize: 11, color: '#64748B', marginTop: 2 },
-  navActive: { color: '#4C1D95', fontWeight: '700' }
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
+  navText: { fontSize: 11, color: '#9E8697', marginTop: 4, fontWeight: '500', textAlign: 'center' },
+  navActive: { color: '#521841', fontWeight: '700' }
 });

@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,50 +14,32 @@ import TelemetryScreen from './src/screens/TelemetryScreen';
 import AlertDetailScreen from './src/screens/AlertDetailScreen';
 import AccompaniScreen from './src/screens/AccompaniScreen';
 import ActiveAlertScreen from './src/screens/ActiveAlertScreen';
+import ResourcesScreen from './src/screens/ResourcesScreen';
 
-// Carga segura de ResourcesScreen (evita el crash si el archivo aún no existe)
-let ResourcesScreen;
-try {
-  ResourcesScreen = require('./src/screens/ResourcesScreen').default;
-} catch (e) {
-  ResourcesScreen = AlertDetailScreen; // Fallback temporal para no congelar la app
-}
-
-const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// Navegador por pestañas principales
-function TabNavigator({ user, setUser, handleLogout }) {
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: { display: 'none' },
-      }}
-    >
-      <Tab.Screen name="InicioTab">
-        {(props) => (
-          <HomeScreen 
-            {...props} 
-            user={user} 
-            setUser={setUser} 
-            onLogout={handleLogout} 
-          />
-        )}
-      </Tab.Screen>
+// Redirige inmediatamente hacia la pantalla real sin quedarse atorado en MainTabs
+function MainTabsRedirect({ navigation, route }) {
+  useEffect(() => {
+    const target = route?.params?.screen || 'InicioTab';
 
-      <Tab.Screen name="ContactosTab" component={ContactsScreen} />
-      <Tab.Screen name="Contactos" component={ContactsScreen} />
+    if (target === 'ContactosTab' || target === 'Contacts') {
+      navigation.replace('ContactosTab');
+    } else if (target === 'AccompaniTab' || target === 'Escort') {
+      navigation.replace('AccompaniTab');
+    } else if (
+      target === 'HistorialTab' ||
+      target === 'RecursosTab' ||
+      target === 'MapaDeApoyo' ||
+      target === 'Resources'
+    ) {
+      navigation.replace('HistorialTab');
+    } else {
+      navigation.replace('InicioTab');
+    }
+  }, [navigation, route?.params?.screen]);
 
-      <Tab.Screen name="AccompaniTab" component={AccompaniScreen} />
-      <Tab.Screen name="MapaDeApoyo" component={AccompaniScreen} />
-      <Tab.Screen name="Escort" component={AccompaniScreen} />
-
-      <Tab.Screen name="HistorialTab" component={ResourcesScreen} />
-      <Tab.Screen name="RecursosTab" component={ResourcesScreen} />
-      <Tab.Screen name="ResourcesTab" component={ResourcesScreen} />
-    </Tab.Navigator>
-  );
+  return null;
 }
 
 export default function App() {
@@ -128,54 +109,77 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          
-          {/* Tabs Principales */}
-          <Stack.Screen name="MainTabs">
+        <Stack.Navigator 
+          initialRouteName="InicioTab"
+          screenOptions={{ headerShown: false }}
+        >
+          {/* PANTALLAS PRINCIPALES DE LA BARRA INFERIOR */}
+          <Stack.Screen name="InicioTab" options={{ animation: 'none' }}>
             {(props) => (
-              <TabNavigator 
+              <HomeScreen 
                 {...props} 
                 user={user} 
                 setUser={setUser} 
-                handleLogout={handleLogout} 
+                onLogout={handleLogout} 
               />
             )}
           </Stack.Screen>
 
-          {/* FRAME 2: PULSERA 3D */}
+          <Stack.Screen 
+            name="ContactosTab" 
+            component={ContactsScreen} 
+            options={{ animation: 'none' }} 
+          />
+
+          <Stack.Screen 
+            name="AccompaniTab" 
+            component={AccompaniScreen} 
+            options={{ animation: 'none' }} 
+          />
+
+          <Stack.Screen 
+            name="HistorialTab" 
+            component={ResourcesScreen} 
+            options={{ animation: 'none' }} 
+          />
+
+          <Stack.Screen 
+            name="RecursosTab" 
+            component={ResourcesScreen} 
+            options={{ animation: 'none' }} 
+          />
+
+          {/* REDIRECTOR LIMPIO PARA CUALQUIER LLAMADO A MainTabs */}
+          <Stack.Screen 
+            name="MainTabs" 
+            component={MainTabsRedirect} 
+            options={{ animation: 'none' }} 
+          />
+
+          {/* PANTALLAS SECUNDARIAS / DETALLE */}
           <Stack.Screen name="MyDevice" component={MyDeviceScreen} />
           <Stack.Screen name="Bracelet" component={MyDeviceScreen} />
 
-          {/* FRAME 3: SENSORES Y TELEMETRÍA (TODOS LOS ALIAS RECUPERADOS) */}
           <Stack.Screen name="Telemetry" component={TelemetryScreen} />
           <Stack.Screen name="Sensors" component={TelemetryScreen} />
           <Stack.Screen name="Sensores" component={TelemetryScreen} />
 
-          {/* FRAME 4: HISTORIAL / EVIDENCIA PDF (TODOS LOS ALIAS RECUPERADOS) */}
           <Stack.Screen name="AlertDetail" component={AlertDetailScreen} />
           <Stack.Screen name="UltimaAlerta" component={AlertDetailScreen} />
           <Stack.Screen name="LastAlert" component={AlertDetailScreen} />
-          <Stack.Screen name="Historial" component={AlertDetailScreen} />
-          <Stack.Screen name="AlertHistory" component={AlertDetailScreen} />
 
-          {/* FRAME 5: RED DE CONFIANZA / CONTACTOS */}
           <Stack.Screen name="Contacts" component={ContactsScreen} />
           <Stack.Screen name="Contactos" component={ContactsScreen} />
-          <Stack.Screen name="RedDeConfianza" component={ContactsScreen} />
 
-          {/* FRAME 6: ACOMPÁÑAME (TODOS LOS ALIAS RECUPERADOS) */}
           <Stack.Screen name="Accompani" component={AccompaniScreen} />
-          <Stack.Screen name="MapaDeApoyo" component={AccompaniScreen} />
           <Stack.Screen name="Escort" component={AccompaniScreen} />
 
-          {/* FRAME 7: ALERTA EN CURSO / PIN DE COACCIÓN */}
           <Stack.Screen name="ActiveAlert" component={ActiveAlertScreen} />
-          <Stack.Screen name="AlertaEnCurso" component={ActiveAlertScreen} />
+          <Stack.Screen name="AlertActive" component={ActiveAlertScreen} />
 
-          {/* FRAME RECURSOS */}
           <Stack.Screen name="Resources" component={ResourcesScreen} />
           <Stack.Screen name="Recursos" component={ResourcesScreen} />
-
+          <Stack.Screen name="MapaDeApoyo" component={ResourcesScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

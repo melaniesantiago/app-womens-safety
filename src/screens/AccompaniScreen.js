@@ -75,7 +75,7 @@ export default function AccompaniScreen({ navigation }) {
           }
           return prev - 1;
         });
-      }, 60000); // 1 minuto real
+      }, 60000);
     } else {
       if (locationSubscription.current) {
         locationSubscription.current.remove();
@@ -97,7 +97,7 @@ export default function AccompaniScreen({ navigation }) {
     Alert.alert('🛡️ Trayecto Iniciado', `GPS activado. Monitoreando recorrido a ${selectedRoute.destination}.`);
   };
 
-  // BOTÓN FUNCIONAL: Detener / Cancelar Trayecto
+  // Detener / Cancelar Trayecto
   const handleStopMonitoring = () => {
     Alert.alert(
       '¿Detener Trayecto?',
@@ -129,13 +129,13 @@ export default function AccompaniScreen({ navigation }) {
     Alert.alert('⏱️ Tiempo Extendido', 'Se agregaron +10 minutos correctamente a tu temporizador.');
   };
 
-  // Llegué bien
+  // Llegué bien (Navegación directa a InicioTab)
   const handleArrivedSafely = () => {
     setIsMonitoringActive(false);
     Alert.alert(
       '¡Llegaste a salvo! 🎉',
       `Confirmaste tu llegada a "${selectedRoute.destination}". Tu Red de Confianza ha sido notificada.`,
-      [{ text: 'Entendido', onPress: () => navigation?.navigate('MainTabs', { screen: 'InicioTab' }) }]
+      [{ text: 'Entendido', onPress: () => navigation?.navigate('InicioTab') }]
     );
   };
 
@@ -420,24 +420,24 @@ export default function AccompaniScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* TabBar Inferior */}
+      {/* TabBar Inferior (Rutas directas limpias) */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'InicioTab' })}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('InicioTab')}>
           <Ionicons name="home-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Inicio</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'ContactosTab' })}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('ContactosTab')}>
           <Ionicons name="people-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Contactos</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} activeOpacity={1}>
           <Ionicons name="location" size={24} color="#521841" />
           <Text style={[styles.navText, styles.navTextActive]}>Acompáñame</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'HistorialTab' })}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('HistorialTab')}>
           <Ionicons name="bookmark-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Recursos</Text>
         </TouchableOpacity>
