@@ -5,6 +5,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import SplashAnimationScreen from './src/screens/SplashAnimationScreen';
+import SecurityLinkScreen from './src/screens/SecurityLinkScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ContactsScreen from './src/screens/ContactsScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -56,6 +58,7 @@ function MainTabs({ user, setUser, onLogout, contacts, setContacts }) {
           <AccompaniScreen
             {...props}
             contacts={contacts}
+            user={user}
           />
         )}
       </Tab.Screen>
@@ -68,13 +71,16 @@ function MainTabs({ user, setUser, onLogout, contacts, setContacts }) {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const [screenState, setScreenState] = useState('login');
 
   const [user, setUser] = useState({
     name: '',
     email: '',
     avatarIcon: 'person',
+    pin: '1234',
   });
 
   // Red de confianza vacía por defecto (persiste al cambiar entre pestañas)
@@ -86,6 +92,7 @@ export default function App() {
         name: registeredData.name || 'Usuaria',
         email: registeredData.email || '',
         avatarIcon: 'person',
+        pin: registeredData.pin || '1234',
       });
       setContacts([]);
     }
@@ -95,7 +102,7 @@ export default function App() {
   const handleLogin = (loginData) => {
     setUser((prev) => {
       const email = loginData?.email || prev.email || 'usuaria@correo.com';
-      let name = prev.name;
+      let name = loginData?.name || prev.name;
 
       if (!name) {
         const emailUser = email.split('@')[0];
@@ -106,19 +113,34 @@ export default function App() {
         name: name,
         email: email,
         avatarIcon: prev.avatarIcon || 'person',
+        pin: loginData?.pin || prev.pin || '1234',
       };
     });
+    setIsLinking(true);
     setIsLoggedIn(true);
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
+    setIsLinking(false);
     setScreenState('login');
   };
 
+  // 1. Pantalla animada inicial
+  if (showSplash) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <SplashAnimationScreen onFinish={() => setShowSplash(false)} />
+      </SafeAreaProvider>
+    );
+  }
+
+  // 2. Flujo de Login y Registro
   if (!isLoggedIn) {
     return (
       <SafeAreaProvider>
+        <StatusBar style="light" />
         {screenState === 'login' ? (
           <LoginScreen
             onLogin={handleLogin}
@@ -134,13 +156,27 @@ export default function App() {
     );
   }
 
+  // 3. Pantalla puente de sincronización animada tras iniciar sesión
+  if (isLinking) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <SecurityLinkScreen
+          user={user}
+          onComplete={() => setIsLinking(false)}
+        />
+      </SafeAreaProvider>
+    );
+  }
+
+  // 4. Aplicación principal con todas tus rutas
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="MainTabs"
-          screenOptions={{ headerShown: false }}
+          screenOptions={{ headerShown: false, animation: 'fade' }}
         >
           <Stack.Screen name="MainTabs">
             {(props) => (
@@ -176,11 +212,45 @@ export default function App() {
             )}
           </Stack.Screen>
 
-          <Stack.Screen name="Accompani" component={AccompaniScreen} />
-          <Stack.Screen name="Escort" component={AccompaniScreen} />
+          <Stack.Screen name="Accompani">
+            {(props) => (
+              <AccompaniScreen
+                {...props}
+                contacts={contacts}
+                user={user}
+              />
+            )}
+          </Stack.Screen>
 
-          <Stack.Screen name="ActiveAlert" component={ActiveAlertScreen} />
-          <Stack.Screen name="AlertActive" component={ActiveAlertScreen} />
+          <Stack.Screen name="Escort">
+            {(props) => (
+              <AccompaniScreen
+                {...props}
+                contacts={contacts}
+                user={user}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="ActiveAlert">
+            {(props) => (
+              <ActiveAlertScreen
+                {...props}
+                user={user}
+                contacts={contacts}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen name="AlertActive">
+            {(props) => (
+              <ActiveAlertScreen
+                {...props}
+                user={user}
+                contacts={contacts}
+              />
+            )}
+          </Stack.Screen>
 
           <Stack.Screen name="Resources" component={ResourcesScreen} />
           <Stack.Screen name="Recursos" component={ResourcesScreen} />

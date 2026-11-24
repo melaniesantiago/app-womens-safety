@@ -7,159 +7,286 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
-  Alert
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function LoginScreen({ onLogin, onNavigateToRegister }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLoginPress = () => {
-    const cleanEmail = email.trim();
-
-    if (!cleanEmail) {
-      Alert.alert('Correo requerido', 'Por favor ingresa tu correo electrónico para continuar.');
+    if (!email.trim() || !email.includes('@')) {
+      Alert.alert('Correo inválido', 'Por favor ingresa un correo electrónico válido.');
+      return;
+    }
+    if (password.length < 4) {
+      Alert.alert('Contraseña requerida', 'Ingresa tu contraseña (mínimo 4 caracteres).');
       return;
     }
 
-    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      Alert.alert('Correo no válido', 'Ingresa un correo electrónico válido (ejemplo@correo.com).');
-      return;
+    if (onLogin) {
+      onLogin({ email: email.trim().toLowerCase() });
     }
+  };
 
-    if (!password.trim()) {
-      Alert.alert('Contraseña requerida', 'Por favor ingresa tu contraseña.');
-      return;
+  const handleDemoAccess = () => {
+    if (onLogin) {
+      onLogin({
+        name: 'Melisan Reséndiz',
+        email: 'melisan@pulserasegura.mx',
+      });
     }
-
-    onLogin({ email: cleanEmail });
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F2EBF0" />
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          
-          <View style={styles.logoContainer}>
-            <View style={styles.symbolBadge}>
-              <Text style={styles.logoIcon}>♀</Text>
+    <View style={styles.root}>
+      {/* Cabecera curva guinda */}
+      <View style={styles.topHeaderBanner}>
+        <SafeAreaView edges={['top']} style={styles.bannerInner}>
+          <View style={styles.logoBadge}>
+            <MaterialCommunityIcons name="watch-variant" size={30} color="#521841" />
+            <View style={styles.miniShield}>
+              <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
             </View>
-            <Text style={styles.title}>WOMEN SAFETY</Text>
-            <Text style={styles.subtitle}>Inicia sesión para mantenerte protegida</Text>
           </View>
+          <Text style={styles.headerTitle}>Bienvenida de nuevo</Text>
+          <Text style={styles.headerSubtitle}>
+            Inicia sesión para monitorear tu pulsera y tu red de confianza
+          </Text>
+        </SafeAreaView>
+      </View>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Correo Electrónico</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={18} color="#521841" style={styles.inputIcon} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.formScroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Tarjeta principal */}
+          <View style={styles.card}>
+            <Text style={styles.cardHeading}>Iniciar sesión</Text>
+
+            {/* Campo Correo */}
+            <Text style={styles.label}>Correo electrónico</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={19} color="#521841" style={styles.icon} />
               <TextInput
                 style={styles.input}
-                placeholder="ejemplo@correo.com"
-                placeholderTextColor="#9E8697"
-                value={email}
-                onChangeText={setEmail}
+                placeholder="tu.correo@ejemplo.com"
+                placeholderTextColor="#94A3B8"
                 keyboardType="email-address"
                 autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
             </View>
 
+            {/* Campo Contraseña */}
             <Text style={styles.label}>Contraseña</Text>
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={18} color="#521841" style={styles.inputIcon} />
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={19} color="#521841" style={styles.icon} />
               <TextInput
                 style={styles.input}
                 placeholder="••••••••"
-                placeholderTextColor="#9E8697"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
               />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>¿Olvidaste tu contraseña?</Text>
+            {/* Botón Principal */}
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              activeOpacity={0.88}
+              onPress={handleLoginPress}
+            >
+              <Text style={styles.primaryBtnText}>Iniciar sesión</Text>
+              <Ionicons name="arrow-forward" size={19} color="#FFFFFF" style={{ marginLeft: 8 }} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.loginButton} activeOpacity={0.85} onPress={handleLoginPress}>
-              <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
-            </TouchableOpacity>
-
-            <View style={styles.registerRow}>
-              <Text style={styles.registerText}>¿No tienes una cuenta? </Text>
-              <TouchableOpacity 
-                activeOpacity={0.6}
-                onPress={() => {
-                  if (onNavigateToRegister) onNavigateToRegister();
-                }}
-              >
-                <Text style={styles.registerLink}>Regístrate</Text>
+            {/* Enlace clásico hacia RegisterScreen */}
+            <View style={styles.switchPromptRow}>
+              <Text style={styles.switchPromptText}>¿No tienes cuenta?</Text>
+              <TouchableOpacity onPress={onNavigateToRegister}>
+                <Text style={styles.switchPromptLink}> Regístrate ahora</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-        </View>
+          {/* Acceso rápido demo para presentaciones */}
+          <TouchableOpacity
+            style={styles.demoAccessBtn}
+            activeOpacity={0.8}
+            onPress={handleDemoAccess}
+          >
+            <Ionicons name="flash-outline" size={16} color="#0D7A68" style={{ marginRight: 6 }} />
+            <Text style={styles.demoAccessText}>Entrar con cuenta demo (Presentación)</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2EBF0' },
-  keyboardView: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' },
-  logoContainer: { alignItems: 'center', marginBottom: 32 },
-  symbolBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#DFD2DC',
+  root: {
+    flex: 1,
+    backgroundColor: '#F9F8F6',
+  },
+  topHeaderBanner: {
+    backgroundColor: '#521841',
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
+    paddingHorizontal: 24,
+    paddingBottom: 30,
+    paddingTop: 12,
+  },
+  bannerInner: {
+    alignItems: 'center',
+  },
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#CFC0CC',
-    marginBottom: 12,
+    marginBottom: 14,
+    elevation: 4,
   },
-  logoIcon: { fontSize: 30, color: '#521841', fontWeight: 'bold' },
-  title: { fontSize: 22, fontWeight: '800', color: '#380E2B', letterSpacing: 1 },
-  subtitle: { fontSize: 12, color: '#785970', marginTop: 4, fontWeight: '600' },
-  form: { width: '100%' },
-  label: { fontSize: 12, fontWeight: '700', color: '#380E2B', marginBottom: 6, marginLeft: 2 },
-  inputContainer: {
+  miniShield: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#0D7A68',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#F3E8F0',
+    textAlign: 'center',
+    marginTop: 5,
+    paddingHorizontal: 14,
+  },
+  formScroll: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 36,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 26,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+  },
+  cardHeading: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 18,
+    textAlign: 'center',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#380E2B',
+    marginBottom: 6,
+    marginLeft: 2,
+  },
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E4D8E2',
-    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#D4C2D0',
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    height: 48,
-  },
-  inputIcon: { marginRight: 8 },
-  input: { flex: 1, color: '#380E2B', fontSize: 14 },
-  forgotPassword: { alignSelf: 'flex-end', marginBottom: 24 },
-  forgotPasswordText: { fontSize: 11, color: '#521841', fontWeight: '600' },
-  loginButton: {
-    backgroundColor: '#521841',
+    borderColor: '#CBD5E1',
     borderRadius: 14,
+    paddingHorizontal: 14,
     height: 50,
+    marginBottom: 16,
+  },
+  icon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  primaryBtn: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#521841',
+    borderRadius: 16,
+    paddingVertical: 15,
+    marginTop: 6,
     elevation: 2,
-    shadowColor: '#521841',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
   },
-  loginButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
-  registerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 20, paddingVertical: 5 },
-  registerText: { fontSize: 12, color: '#785970' },
-  registerLink: { fontSize: 12, color: '#521841', fontWeight: 'bold' },
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  switchPromptRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  switchPromptText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  switchPromptLink: {
+    fontSize: 13,
+    color: '#521841',
+    fontWeight: '800',
+  },
+  demoAccessBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1,
+    borderColor: '#BCE3D6',
+    borderRadius: 16,
+    paddingVertical: 13,
+    marginTop: 16,
+  },
+  demoAccessText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D7A68',
+  },
 });
