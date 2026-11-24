@@ -1,0 +1,1 @@
+export const API_URL = 'https://duwiuwa-production.up.railway.app/api/app';

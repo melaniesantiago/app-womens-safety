@@ -24,6 +24,7 @@ import {
   AudioModule,
   RecordingPresets,
 } from 'expo-audio';
+import { API_URL } from '../config/api';
 
 const AVATAR_ICONS = [
   { id: 'person', label: 'Clásico' },
@@ -33,6 +34,7 @@ const AVATAR_ICONS = [
   { id: 'flower', label: 'Flor' },
 ];
 
+// PINs de respaldo (solo se usan en modo práctica o si no hay red)
 const REAL_CANCEL_PIN = '1234';
 const COERCION_PIN = '9999';
 
@@ -45,8 +47,14 @@ export default function HomeScreen({ user, setUser, onLogout }) {
   const [editEmail, setEditEmail] = useState(user?.email || '');
   const [editAvatar, setEditAvatar] = useState(user?.avatarIcon || 'person');
 
-  // Pulso en vivo simulado para la tarjeta Sensores
-  const [liveBpm, setLiveBpm] = useState(76);
+  // Datos reales de la pulsera (vienen del backend en Railway: GET /estado)
+  const [conectado, setConectado] = useState(false);
+  const [usuaria, setUsuaria] = useState({ pulso: 0, oxigeno: 0, bat: 255 });
+  const [ultimaAlerta, setUltimaAlerta] = useState(null);
+  const alertaAbiertaRef = useRef(false);
+  const triggerRef = useRef(null);
+  const [enEmergencia, setEnEmergencia] = useState(false);
+  const [canceladaLocal, setCanceladaLocal] = useState(false);
 
   // Estados del botón "Pedir ayuda" (cuenta regresiva de 3 segundos al mantener presionado)
   const [isHoldingPanic, setIsHoldingPanic] = useState(false);
@@ -88,13 +96,50 @@ export default function HomeScreen({ user, setUser, onLogout }) {
     setEditAvatar(user?.avatarIcon || 'person');
   }, [user]);
 
-  // Variación realista del ritmo cardíaco en Sensores
+  // Consultar el estado de la pulsera cada 3 segundos
   useEffect(() => {
-    const bpmTimer = setInterval(() => {
-      const delta = Math.floor(Math.random() * 5) - 2; // -2 a +2 lpm
-      setLiveBpm((prev) => Math.min(84, Math.max(72, prev + delta)));
-    }, 3000);
-    return () => clearInterval(bpmTimer);
+    let activo = true;
+
+    const consultarEstado = async () => {
+      try {
+        const res = await fetch(`${API_URL}/estado`);
+        const data = await res.json();
+        if (!activo || !data.ok) return;
+
+        setConectado(Boolean(data.conectado));
+
+        if (data.usuaria) {
+          setUsuaria(data.usuaria);
+
+          const emergencia =
+            data.usuaria.estado === 'emergencia' ||
+            data.usuaria.situacion === 'emergencia';
+
+          setEnEmergencia(emergencia);
+
+          if (emergencia && !alertaAbiertaRef.current) {
+            alertaAbiertaRef.current = true;
+            triggerRef.current?.(false); // abre el modal (botón físico de la pulsera)
+          } else if (!emergencia) {
+            alertaAbiertaRef.current = false;
+            setCanceladaLocal(false);
+          }
+        }
+
+        if (Array.isArray(data.historial) && data.historial.length > 0) {
+          setUltimaAlerta(data.historial[0]);
+        }
+      } catch {
+        if (activo) setConectado(false);
+      }
+    };
+
+    consultarEstado();
+    const id = setInterval(consultarEstado, 3000);
+    return () => {
+      activo = false;
+      clearInterval(id);
+    };
   }, []);
 
   // Limpiar intervalos si se desmonta la pantalla
@@ -152,6 +197,14 @@ export default function HomeScreen({ user, setUser, onLogout }) {
   const displayName = user?.name ? user.name.trim().split(' ')[0] : 'Usuaria';
   const currentAvatar = user?.avatarIcon || 'person';
 
+  const textoBateria =
+    usuaria.bat === 255 || usuaria.bat === undefined
+      ? 'USB / Sin bat'
+      : `Batería ${usuaria.bat} %`;
+
+  // Pantalla roja solo con alerta real. Con PIN de coacción se ve normal a propósito.
+  const mostrarRojo = enEmergencia && !canceladaLocal && !silentCoercionActive;
+
   const getFormattedDate = () => {
     const meses = [
       'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -179,6 +232,19 @@ export default function HomeScreen({ user, setUser, onLogout }) {
 
     setIsProfileModalVisible(false);
     Alert.alert('Perfil actualizado 💜', 'Tus datos se han guardado correctamente.');
+  };
+
+  // Avisa al servidor (sin await: el modal abre aunque no haya internet)
+  const enviarSosAlServidor = () => {
+    fetch(`${API_URL}/sos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: user?.name || 'Usuaria',
+        lat: usuaria.lat || 0,
+        lon: usuaria.lon || 0,
+      }),
+    }).catch(() => {});
   };
 
   // =========================================================================
@@ -209,6 +275,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
         setPanicCountdown(3);
         holdProgressAnim.setValue(0);
         Vibration.vibrate([0, 200, 100, 300]);
+        enviarSosAlServidor();
         triggerEmergencyAlert(false);
       }
     }, 1000);
@@ -245,6 +312,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
     });
 
     setIsPracticeMode(practice);
+    if (!practice) alertaAbiertaRef.current = true;
     setSosStartTime(formattedHour);
     setStep2Time('');
     setStep3Time('');
@@ -275,6 +343,9 @@ export default function HomeScreen({ user, setUser, onLogout }) {
 
     await startEvidenceAudioRecording();
   };
+
+  // Mantiene la referencia al disparador siempre actualizada (la usa el polling)
+  triggerRef.current = triggerEmergencyAlert;
 
   const startEvidenceAudioRecording = async () => {
     try {
@@ -336,8 +407,39 @@ export default function HomeScreen({ user, setUser, onLogout }) {
     }
   };
 
+  // Valida el PIN: en el servidor (alerta real) o local (práctica / sin red)
   const handleVerifyCancelPin = async () => {
-    if (pinInput === REAL_CANCEL_PIN) {
+    if (pinInput.length < 4) {
+      Alert.alert('PIN requerido', 'Ingresa tu PIN de 4 dígitos.');
+      return;
+    }
+
+    let resultado; // 'cancelar' | 'coaccion' | 'incorrecto'
+    const validarLocal = () =>
+      pinInput === REAL_CANCEL_PIN
+        ? 'cancelar'
+        : pinInput === COERCION_PIN
+        ? 'coaccion'
+        : 'incorrecto';
+
+    if (isPracticeMode) {
+      resultado = validarLocal();
+    } else {
+      try {
+        const res = await fetch(`${API_URL}/cancelar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pinInput }),
+        });
+        const data = await res.json();
+        resultado = !data.ok ? 'incorrecto' : data.coaccion ? 'coaccion' : 'cancelar';
+      } catch {
+        resultado = validarLocal(); // sin red: valida en el teléfono
+      }
+    }
+
+    if (resultado === 'cancelar') {
+      setCanceladaLocal(true);
       await stopEvidenceAudioRecording();
       setIsPinModalVisible(false);
       setIsSosModalVisible(false);
@@ -347,16 +449,14 @@ export default function HomeScreen({ user, setUser, onLogout }) {
         'Alerta Cancelada',
         'Has confirmado que te encuentras segura. El audio de evidencia quedó guardado cifrado en tu teléfono.'
       );
-    } else if (pinInput === COERCION_PIN) {
+    } else if (resultado === 'coaccion') {
       setIsPinModalVisible(false);
       setIsSosModalVisible(false);
       setPinInput('');
       setSilentCoercionActive(true);
     } else {
-      Alert.alert(
-        'PIN incorrecto',
-        'Ingresa tu PIN de seguridad de 4 dígitos (Demo: 1234 para cancelar / 9999 coacción).'
-      );
+      Alert.alert('PIN incorrecto', 'El PIN ingresado no es válido.');
+      setPinInput('');
     }
   };
 
@@ -372,13 +472,13 @@ export default function HomeScreen({ user, setUser, onLogout }) {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, mostrarRojo && styles.containerAlerta]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header con Botón de Perfil en la esquina superior derecha */}
         <View style={styles.header}>
           <View style={{ flex: 1, paddingRight: 10 }}>
-            <Text style={styles.dateText}>{getFormattedDate()}</Text>
-            <Text style={styles.welcomeText} numberOfLines={1}>
+            <Text style={[styles.dateText, mostrarRojo && styles.textoClaroSuave]}>{getFormattedDate()}</Text>
+            <Text style={[styles.welcomeText, mostrarRojo && styles.textoClaro]} numberOfLines={1}>
               Hola, {displayName}
             </Text>
           </View>
@@ -395,6 +495,20 @@ export default function HomeScreen({ user, setUser, onLogout }) {
           </TouchableOpacity>
         </View>
 
+        {/* Aviso de alerta activa (toca para ver el seguimiento) */}
+        {mostrarRojo && (
+          <TouchableOpacity
+            style={styles.alertaActivaStrip}
+            activeOpacity={0.85}
+            onPress={() => setIsSosModalVisible(true)}
+          >
+            <View style={styles.redPulseDot} />
+            <Text style={styles.alertaActivaText}>
+              ALERTA ACTIVA · Toca para ver el seguimiento
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Indicador discreto solo si se activó PIN de coacción */}
         {silentCoercionActive && (
           <TouchableOpacity
@@ -410,12 +524,15 @@ export default function HomeScreen({ user, setUser, onLogout }) {
 
         {/* Botón Rojo Pedir Ayuda con Cuenta Regresiva y Barra de Progreso */}
         <TouchableOpacity
-          style={[styles.panicButton, isHoldingPanic && styles.panicButtonHolding]}
+          style={[
+            styles.panicButton,
+            mostrarRojo && styles.panicButtonAlerta,
+            isHoldingPanic && styles.panicButtonHolding,
+          ]}
           activeOpacity={0.95}
           onPressIn={handlePressInPanic}
           onPressOut={handlePressOutPanic}
         >
-          {/* Barra de progreso animada al mantener presionado */}
           {isHoldingPanic && (
             <Animated.View style={[styles.panicProgressFill, { width: progressWidth }]} />
           )}
@@ -450,12 +567,14 @@ export default function HomeScreen({ user, setUser, onLogout }) {
           </View>
           <View style={styles.braceletInfo}>
             <Text style={styles.braceletTitle}>Mi pulsera</Text>
-            <Text style={styles.braceletSub}>Batería 82 % • Red móvil • GPS fijo</Text>
+            <Text style={styles.braceletSub}>{textoBateria} • Red móvil • GPS</Text>
             <Text style={styles.view3dText}>Ver en 3D</Text>
           </View>
-          <View style={styles.connectedChip}>
-            <View style={styles.greenDot} />
-            <Text style={styles.connectedText}>Conectada</Text>
+          <View style={[styles.connectedChip, !conectado && { backgroundColor: '#FEE2E2' }]}>
+            <View style={[styles.greenDot, !conectado && { backgroundColor: '#C5221F' }]} />
+            <Text style={[styles.connectedText, !conectado && { color: '#C5221F' }]}>
+              {conectado ? 'Conectada' : 'Sin red'}
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -471,7 +590,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               <Text style={styles.cardCategoryTitleRed}>Sensores</Text>
             </View>
             <View style={styles.bpmRow}>
-              <Text style={styles.bpmNumber}>{liveBpm}</Text>
+              <Text style={styles.bpmNumber}>{usuaria.pulso > 0 ? usuaria.pulso : '--'}</Text>
               <Text style={styles.bpmUnit}>lpm</Text>
             </View>
 
@@ -479,7 +598,9 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               <View style={styles.ecgLine} />
             </View>
 
-            <Text style={styles.cardFooterText}>GPS, Red móvil, voz y más</Text>
+            <Text style={styles.cardFooterText}>
+              SpO₂ {usuaria.oxigeno > 0 ? `${usuaria.oxigeno}%` : '--'} • En vivo
+            </Text>
           </TouchableOpacity>
 
           {/* Card Última Alerta */}
@@ -491,11 +612,27 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               <Ionicons name="time-outline" size={18} color="#4C1D95" />
               <Text style={styles.cardCategoryTitlePurple}>Última alerta</Text>
             </View>
-            <Text style={styles.alertDateText}>3 nov • 18:32</Text>
-            <View style={styles.attendedChip}>
-              <Text style={styles.attendedChipText}>Atendida</Text>
+            <Text style={styles.alertDateText}>
+              {ultimaAlerta ? ultimaAlerta.hora : 'Sin registros'}
+            </Text>
+            <View
+              style={[
+                styles.attendedChip,
+                ultimaAlerta?.nivel === 'alto' && { backgroundColor: '#FEE2E2' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.attendedChipText,
+                  ultimaAlerta?.nivel === 'alto' && { color: '#C5221F' },
+                ]}
+              >
+                {ultimaAlerta?.nivel === 'alto' ? 'Activa' : 'Atendida'}
+              </Text>
             </View>
-            <Text style={styles.cardFooterText}>Hora, lugar y pulso</Text>
+            <Text style={styles.cardFooterText} numberOfLines={1}>
+              {ultimaAlerta ? ultimaAlerta.texto : 'Hora, lugar y pulso'}
+            </Text>
           </TouchableOpacity>
 
           {/* Card Acompáñame */}
@@ -609,7 +746,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
                 </View>
                 <View style={styles.timelineTextCol}>
                   <Text style={styles.stepTitle}>Enviada desde la pulsera</Text>
-                  <Text style={styles.stepSub}>{sosStartTime} · vía LoRa</Text>
+                  <Text style={styles.stepSub}>{sosStartTime} · vía red móvil</Text>
                 </View>
               </View>
 
@@ -841,7 +978,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
 
             <View style={styles.sosFooterNoteBox}>
               <Text style={styles.sosFooterNoteText}>
-                Seguimiento: enviada ➔ recibida ➔ en atención. Cancelar pide PIN; un PIN de coacción finge cancelar y mantiene la alerta activa. Respaldo por SMS si no hay LoRa ni LTE.
+                Seguimiento: enviada ➔ recibida ➔ en atención. Cancelar pide PIN; un PIN de coacción finge cancelar y mantiene la alerta activa. Respaldo por SMS si no hay red móvil.
               </Text>
             </View>
           </ScrollView>
@@ -849,7 +986,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
       </Modal>
 
       {/* ===================================================================== */}
-      {/* MODAL INGRESAR PIN DE SEGURIDAD (1234 REAL / 9999 COACCIÓN)           */}
+      {/* MODAL INGRESAR PIN DE SEGURIDAD                                       */}
       {/* ===================================================================== */}
       <Modal
         animationType="fade"
@@ -882,6 +1019,7 @@ export default function HomeScreen({ user, setUser, onLogout }) {
               autoFocus
             />
 
+            {/* Quitar esta línea antes de usarlo como producto real */}
             <Text style={styles.pinHelperHint}>
               PIN normal: 1234 · PIN de coacción silencioso: 9999
             </Text>
@@ -1028,6 +1166,20 @@ export default function HomeScreen({ user, setUser, onLogout }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F8F6' },
+  containerAlerta: { backgroundColor: '#B91C1C' },
+  textoClaro: { color: '#FFFFFF' },
+  textoClaroSuave: { color: '#FEE2E2' },
+  alertaActivaStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  alertaActivaText: { fontSize: 12, fontWeight: '800', color: '#991B1B' },
+  panicButtonAlerta: { backgroundColor: '#7F1D1D' },
   scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 85 },
 
   header: {

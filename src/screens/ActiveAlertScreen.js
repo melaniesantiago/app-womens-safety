@@ -1,26 +1,54 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  ScrollView, 
-  Alert, 
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
   Linking,
   Modal,
-  TextInput
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../config/api';
 
 export default function ActiveAlertScreen({ navigation }) {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [isPinModalVisible, setIsPinModalVisible] = useState(false);
   const [pinInput, setPinInput] = useState('');
+  const [inicio] = useState(
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+  const [gps, setGps] = useState({ lat: 0, lon: 0 });
 
-  // PINs de prueba
+  // PINs de respaldo (solo si no hay red)
   const REAL_PIN = '1234';
   const COERCION_PIN = '9999';
+
+  // Coordenadas reales de la pulsera
+  useEffect(() => {
+    let activo = true;
+    const cargar = async () => {
+      try {
+        const res = await fetch(`${API_URL}/estado`);
+        const data = await res.json();
+        if (activo && data.ok && data.usuaria) {
+          setGps({
+            lat: Number(data.usuaria.lat) || 0,
+            lon: Number(data.usuaria.lon) || 0,
+          });
+        }
+      } catch {}
+    };
+    cargar();
+    const id = setInterval(cargar, 3000);
+    return () => {
+      activo = false;
+      clearInterval(id);
+    };
+  }, []);
 
   // Realizar llamada al 911
   const handleCall911 = () => {
@@ -29,40 +57,62 @@ export default function ActiveAlertScreen({ navigation }) {
     });
   };
 
-  // Validar PIN ingresado
-  const handleVerifyPin = () => {
-    if (pinInput === REAL_PIN) {
+  // Validar PIN: servidor primero, local si no hay red
+  const handleVerifyPin = async () => {
+    if (pinInput.length < 4) {
+      Alert.alert('PIN requerido', 'Ingresa tu PIN de 4 dígitos.');
+      return;
+    }
+
+    let resultado; // 'cancelar' | 'coaccion' | 'incorrecto'
+    try {
+      const res = await fetch(`${API_URL}/cancelar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      const data = await res.json();
+      resultado = !data.ok ? 'incorrecto' : data.coaccion ? 'coaccion' : 'cancelar';
+    } catch {
+      resultado =
+        pinInput === REAL_PIN
+          ? 'cancelar'
+          : pinInput === COERCION_PIN
+          ? 'coaccion'
+          : 'incorrecto';
+    }
+
+    const irInicio = () => navigation?.navigate('MainTabs', { screen: 'InicioTab' });
+    setPinInput('');
+
+    if (resultado === 'cancelar') {
       setIsPinModalVisible(false);
-      setPinInput('');
       Alert.alert(
         'Alerta Cancelada',
         'Has cancelado la alerta de forma segura. La Instancia de la Mujer ha sido notificada.',
-        [{ text: 'Entendido', onPress: () => navigation?.navigate('MainTabs', { screen: 'InicioTab' }) }]
+        [{ text: 'Entendido', onPress: irInicio }]
       );
-    } else if (pinInput === COERCION_PIN) {
-      // PIN DE COACCIÓN: Finge cancelación visual pero mantiene alerta activa en segundo plano
+    } else if (resultado === 'coaccion') {
+      // PIN DE COACCIÓN: finge cancelación pero la alerta sigue activa en el servidor
       setIsPinModalVisible(false);
-      setPinInput('');
       Alert.alert(
         'Alerta Desactivada',
         'La alerta ha sido finalizada correctamente.',
-        [{ text: 'Aceptar', onPress: () => navigation?.navigate('MainTabs', { screen: 'InicioTab' }) }]
+        [{ text: 'Aceptar', onPress: irInicio }]
       );
     } else {
       Alert.alert('PIN Incorrecto', 'El PIN de seguridad ingresado no es válido.');
-      setPinInput('');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
         {/* BANNER ROJO INSTITUCIONAL: ALERTA EN CURSO */}
         <View style={styles.alertBanner}>
           <View style={styles.badgeEnCurso}>
             <View style={styles.whiteDot} />
-            <Text style={styles.badgeEnCursoText}>EN CURSO · 18:32</Text>
+            <Text style={styles.badgeEnCursoText}>EN CURSO · {inicio}</Text>
           </View>
           <Text style={styles.alertTitle}>Alerta enviada</Text>
           <Text style={styles.alertSub}>
@@ -72,7 +122,6 @@ export default function ActiveAlertScreen({ navigation }) {
 
         {/* TIMELINE DE SEGUIMIENTO PASO A PASO */}
         <View style={styles.timelineCard}>
-          
           {/* Paso 1: Enviada */}
           <View style={styles.timelineItem}>
             <View style={styles.iconColumn}>
@@ -83,7 +132,7 @@ export default function ActiveAlertScreen({ navigation }) {
             </View>
             <View style={styles.timelineContent}>
               <Text style={styles.stepTitle}>Enviada desde la pulsera</Text>
-              <Text style={styles.stepSub}>18:32 · vía SMS </Text>
+              <Text style={styles.stepSub}>{inicio} · vía red móvil</Text>
             </View>
           </View>
 
@@ -97,7 +146,7 @@ export default function ActiveAlertScreen({ navigation }) {
             </View>
             <View style={styles.timelineContent}>
               <Text style={styles.stepTitle}>Recibida por la Instancia de la Mujer</Text>
-              <Text style={styles.stepSub}>18:32 · panel de monitoreo</Text>
+              <Text style={styles.stepSub}>{inicio} · panel de monitoreo</Text>
             </View>
           </View>
 
@@ -127,7 +176,6 @@ export default function ActiveAlertScreen({ navigation }) {
               <Text style={styles.stepSub}>Una operadora está revisando tu ubicación</Text>
             </View>
           </View>
-
         </View>
 
         {/* UBICACIÓN COMPARTIDA */}
@@ -137,12 +185,16 @@ export default function ActiveAlertScreen({ navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.infoBoxTitle}>Ubicación compartida</Text>
-            <Text style={styles.infoBoxSub}>GPS de la pulsera · precisión 8 m</Text>
+            <Text style={styles.infoBoxSub}>
+              {gps.lat
+                ? `${gps.lat.toFixed(4)}, ${gps.lon.toFixed(4)}`
+                : 'Buscando GPS…'}
+            </Text>
           </View>
         </View>
 
         {/* GRABAR AUDIO DE EVIDENCIA */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.infoBox}
           activeOpacity={0.8}
           onPress={() => setIsRecordingAudio(!isRecordingAudio)}
@@ -157,24 +209,19 @@ export default function ActiveAlertScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* BOTÓN LLAMAR AL 911 */}
-        <TouchableOpacity 
-          style={styles.call911Btn} 
-          activeOpacity={0.8}
-          onPress={handleCall911}
-        >
+        <TouchableOpacity style={styles.call911Btn} activeOpacity={0.8} onPress={handleCall911}>
           <Ionicons name="call" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
           <Text style={styles.call911BtnText}>Llamar al 911</Text>
         </TouchableOpacity>
 
         {/* BOTÓN CANCELAR ALERTA CON PIN */}
-        <TouchableOpacity 
-          style={styles.cancelPinBtn} 
+        <TouchableOpacity
+          style={styles.cancelPinBtn}
           activeOpacity={0.8}
           onPress={() => setIsPinModalVisible(true)}
         >
           <Text style={styles.cancelPinBtnText}>Cancelar alerta con PIN</Text>
         </TouchableOpacity>
-
       </ScrollView>
 
       {/* MODAL DE INGRESO DE PIN */}
@@ -204,23 +251,22 @@ export default function ActiveAlertScreen({ navigation }) {
             />
 
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={styles.modalCancelBtn} 
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
                 onPress={() => setIsPinModalVisible(false)}
               >
                 <Text style={styles.modalCancelBtnText}>Volver</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.modalConfirmBtn} 
-                onPress={handleVerifyPin}
-              >
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleVerifyPin}>
                 <Text style={styles.modalConfirmBtnText}>Desactivar</Text>
               </TouchableOpacity>
             </View>
 
+            {/* Quitar esta línea antes de usarlo como producto real */}
             <Text style={styles.pinTipText}>
-              💡 PIN Real Demo: <Text style={{ fontWeight: '800' }}>1234</Text> | PIN Coacción: <Text style={{ fontWeight: '800' }}>9999</Text>
+              💡 PIN Real Demo: <Text style={{ fontWeight: '800' }}>1234</Text> | PIN Coacción:{' '}
+              <Text style={{ fontWeight: '800' }}>9999</Text>
             </Text>
           </View>
         </View>
@@ -228,22 +274,34 @@ export default function ActiveAlertScreen({ navigation }) {
 
       {/* TabBar Inferior */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'InicioTab' })}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'InicioTab' })}
+        >
           <Ionicons name="home-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Inicio</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'ContactosTab' })}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'ContactosTab' })}
+        >
           <Ionicons name="people-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Contactos</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation?.navigate('MainTabs', { screen: 'AccompaniTab' })}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'AccompaniTab' })}
+        >
           <Ionicons name="location-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Acompáñame</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'HistorialTab' })}
+        >
           <Ionicons name="bookmark" size={24} color="#521841" />
           <Text style={[styles.navText, styles.navTextActive]}>Recursos</Text>
         </TouchableOpacity>
@@ -315,7 +373,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 14,
     backgroundColor: '#F3E8F0',
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
@@ -326,7 +384,7 @@ const styles = StyleSheet.create({
 
   call911Btn: {
     flexDirection: 'row',
-    justify: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#B91C1C',
     marginHorizontal: 20,
@@ -382,7 +440,7 @@ const styles = StyleSheet.create({
     height: 68,
     backgroundColor: '#FFFFFF',
     flexDirection: 'row',
-    justify: 'space-around',
+    justifyContent: 'space-around',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',

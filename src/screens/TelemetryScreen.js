@@ -1,24 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TouchableOpacity, 
-  ScrollView, 
-  Animated, 
-  Easing 
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
+import { API_URL } from '../config/api';
 
 export default function TelemetryScreen({ navigation }) {
-  const [heartRate, setHeartRate] = useState(74);
-  const [signal, setSignal] = useState(-92);
+  const [conectado, setConectado] = useState(false);
+  const [segundosAtras, setSegundosAtras] = useState(0);
+  const [usuaria, setUsuaria] = useState({
+    pulso: 0,
+    oxigeno: 0,
+    lat: 0,
+    lon: 0,
+    acel: 1,
+    bat: 255,
+  });
   const pulseAnim = useState(new Animated.Value(1))[0];
 
+  // Animación de palpitar para el corazón
   useEffect(() => {
-    // Animación de palpitar para el corazón
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -36,18 +45,49 @@ export default function TelemetryScreen({ navigation }) {
       ])
     );
     loop.start();
+    return () => loop.stop();
+  }, []);
 
-    // Simulación biométrica
-    const interval = setInterval(() => {
-      setHeartRate(prev => Math.min(85, Math.max(68, prev + (Math.floor(Math.random() * 3) - 1))));
-      setSignal(prev => Math.min(-85, Math.max(-98, prev + (Math.floor(Math.random() * 3) - 1))));
-    }, 3000);
+  // Datos reales de la pulsera
+  useEffect(() => {
+    let activo = true;
+
+    const consultar = async () => {
+      try {
+        const res = await fetch(`${API_URL}/estado`);
+        const data = await res.json();
+        if (!activo || !data.ok) return;
+
+        setConectado(Boolean(data.conectado));
+        if (data.usuaria) {
+          setUsuaria(data.usuaria);
+          setSegundosAtras(0);
+        }
+      } catch {
+        if (activo) setConectado(false);
+      }
+    };
+
+    consultar();
+    const idFetch = setInterval(consultar, 2500);
+    const idReloj = setInterval(() => setSegundosAtras((p) => p + 1), 1000);
 
     return () => {
-      loop.stop();
-      clearInterval(interval);
+      activo = false;
+      clearInterval(idFetch);
+      clearInterval(idReloj);
     };
   }, []);
+
+  // Number(...) evita errores de .toFixed si el backend manda texto
+  const pulso = Number(usuaria.pulso) || 0;
+  const estadoPulso = pulso === 0 ? 'sin lectura' : pulso > 110 ? 'elevado' : 'en reposo';
+  const lat = Number(usuaria.lat) || 0;
+  const lon = Number(usuaria.lon) || 0;
+  const tieneGps = lat !== 0 && lon !== 0;
+  const acel = Number(usuaria.acel) || 1;
+  const oxigeno = Number(usuaria.oxigeno) || 0;
+  const sinBateria = usuaria.bat === 255 || usuaria.bat === undefined;
 
   // HTML/Canvas para dibujar el trazado de ECG suave y fluido en tiempo real
   const ecgCanvasHTML = `
@@ -65,7 +105,7 @@ export default function TelemetryScreen({ navigation }) {
         <script>
           const canvas = document.getElementById('ecgCanvas');
           const ctx = canvas.getContext('2d');
-          
+
           function resize() {
             canvas.width = window.innerWidth * window.devicePixelRatio;
             canvas.height = window.innerHeight * window.devicePixelRatio;
@@ -80,7 +120,7 @@ export default function TelemetryScreen({ navigation }) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.beginPath();
             ctx.lineWidth = 3.5 * window.devicePixelRatio;
-            ctx.strokeStyle = '#C026D3'; // Color magenta exacto de tu diseño
+            ctx.strokeStyle = '#C026D3';
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
 
@@ -112,7 +152,6 @@ export default function TelemetryScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backCircle} onPress={() => navigation?.goBack()}>
@@ -120,12 +159,11 @@ export default function TelemetryScreen({ navigation }) {
         </TouchableOpacity>
         <View style={styles.headerTextGroup}>
           <Text style={styles.headerTitle}>Sensores en vivo</Text>
-          <Text style={styles.headerSub}>Actualizado hace 5 s</Text>
+          <Text style={styles.headerSub}>Actualizado hace {segundosAtras} s</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
         {/* Tarjeta ECG */}
         <View style={styles.cardECG}>
           <View style={styles.ecgTopRow}>
@@ -135,13 +173,12 @@ export default function TelemetryScreen({ navigation }) {
             <View style={styles.heartTextGroup}>
               <Text style={styles.ecgLabel}>Ritmo cardíaco</Text>
               <View style={styles.heartValueRow}>
-                <Text style={styles.ecgValue}>{heartRate}</Text>
-                <Text style={styles.ecgSubValue}>lpm · en reposo</Text>
+                <Text style={styles.ecgValue}>{pulso > 0 ? pulso : '--'}</Text>
+                <Text style={styles.ecgSubValue}>lpm · {estadoPulso}</Text>
               </View>
             </View>
           </View>
 
-          {/* Gráfica ECG fluida y redonda renderizada vía Canvas */}
           <View style={styles.ecgCanvasContainer}>
             <WebView
               originWhitelist={['*']}
@@ -159,31 +196,32 @@ export default function TelemetryScreen({ navigation }) {
 
         {/* Grid 2x3 de Tarjetas */}
         <View style={styles.gridContainer}>
-          
           <View style={styles.gridCard}>
             <View style={styles.cardHeader}>
               <Ionicons name="location-outline" size={18} color="#6B21A8" />
               <Text style={styles.cardLabel}>Ubicación</Text>
             </View>
-            <Text style={styles.cardMainValue}>Señal fija</Text>
-            <Text style={styles.cardSubValue}>Precisión 8 m</Text>
+            <Text style={styles.cardMainValue}>{tieneGps ? 'Señal fija' : 'Buscando GPS'}</Text>
+            <Text style={styles.cardSubValue}>
+              {tieneGps ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : 'Sin fijar satélite'}
+            </Text>
           </View>
 
           <View style={styles.gridCard}>
             <View style={styles.cardHeader}>
-              <Feather name="bar-chart-2" size={18} color="#6B21A8" />
-              <Text style={styles.cardLabel}>Señal</Text>
+              <Ionicons name="cellular-outline" size={18} color="#6B21A8" />
+              <Text style={styles.cardLabel}>Enlace</Text>
             </View>
-            <Text style={styles.cardMainValue}>{signal} dBm</Text>
-            <Text style={styles.cardSubValue}>Buena</Text>
+            <Text style={styles.cardMainValue}>{conectado ? 'En línea' : 'Sin señal'}</Text>
+            <Text style={styles.cardSubValue}>MQTT cifrado</Text>
           </View>
 
           <View style={styles.gridCard}>
             <View style={styles.cardHeader}>
               <Ionicons name="mic-outline" size={18} color="#6B21A8" />
-              <Text style={styles.cardLabel}>Detección de</Text>
+              <Text style={styles.cardLabel}>Detección de voz</Text>
             </View>
-            <Text style={styles.cardMainValue}>Activa</Text>
+            <Text style={styles.cardMainValue}>{conectado ? 'Activa' : 'En espera'}</Text>
             <Text style={styles.cardSubValue}>"auxilio" o "ayuda"</Text>
           </View>
 
@@ -192,8 +230,8 @@ export default function TelemetryScreen({ navigation }) {
               <MaterialCommunityIcons name="walk" size={18} color="#6B21A8" />
               <Text style={styles.cardLabel}>Movimiento</Text>
             </View>
-            <Text style={styles.cardMainValue}>Caminando</Text>
-            <Text style={styles.cardSubValue}>Sin caídas</Text>
+            <Text style={styles.cardMainValue}>{acel > 1.8 ? 'Agitado' : 'En reposo'}</Text>
+            <Text style={styles.cardSubValue}>Acel: {acel.toFixed(2)} g</Text>
           </View>
 
           <View style={styles.gridCard}>
@@ -201,19 +239,18 @@ export default function TelemetryScreen({ navigation }) {
               <Ionicons name="battery-charging-outline" size={18} color="#6B21A8" />
               <Text style={styles.cardLabel}>Batería</Text>
             </View>
-            <Text style={styles.cardMainValue}>82 %</Text>
-            <Text style={styles.cardSubValue}>Unos 2 días</Text>
+            <Text style={styles.cardMainValue}>{sinBateria ? 'USB' : `${usuaria.bat} %`}</Text>
+            <Text style={styles.cardSubValue}>{sinBateria ? 'Sin batería' : 'Nivel actual'}</Text>
           </View>
 
           <View style={styles.gridCard}>
             <View style={styles.cardHeader}>
-              <Ionicons name="thermometer-outline" size={18} color="#6B21A8" />
-              <Text style={styles.cardLabel}>Temperatura</Text>
+              <Ionicons name="water-outline" size={18} color="#6B21A8" />
+              <Text style={styles.cardLabel}>Oxigenación</Text>
             </View>
-            <Text style={styles.cardMainValue}>34.6 °C</Text>
-            <Text style={styles.cardSubValue}>Piel, normal</Text>
+            <Text style={styles.cardMainValue}>{oxigeno > 0 ? `${oxigeno} %` : '-- %'}</Text>
+            <Text style={styles.cardSubValue}>SpO₂</Text>
           </View>
-
         </View>
 
         {/* Banner de Privacidad */}
@@ -222,37 +259,36 @@ export default function TelemetryScreen({ navigation }) {
             Tus lecturas solo se comparten con la Instancia de la Mujer y tus contactos durante una alerta o un trayecto de Acompáñame.
           </Text>
         </View>
-
       </ScrollView>
 
       {/* TabBar Inferior */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity 
-          style={styles.navItem} 
+        <TouchableOpacity
+          style={styles.navItem}
           onPress={() => navigation?.navigate('MainTabs', { screen: 'InicioTab' })}
         >
           <Ionicons name="home-outline" size={24} color="#521841" />
           <Text style={[styles.navText, styles.navTextActive]}>Inicio</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'MapaDeApoyo' })}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'ContactosTab' })}
         >
           <Ionicons name="people-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Contactos</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => navigation?.navigate('MainTabs', { screen: 'MapaDeApoyo' })}
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation?.navigate('MainTabs', { screen: 'AccompaniTab' })}
         >
           <Ionicons name="location-outline" size={24} color="#9E8697" />
           <Text style={styles.navText}>Acompáñame</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem} 
+        <TouchableOpacity
+          style={styles.navItem}
           onPress={() => navigation?.navigate('MainTabs', { screen: 'HistorialTab' })}
         >
           <Ionicons name="bookmark-outline" size={24} color="#9E8697" />
@@ -302,5 +338,5 @@ const styles = StyleSheet.create({
   bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 68, backgroundColor: '#FFFFFF', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#E2E8F0' },
   navItem: { alignItems: 'center' },
   navText: { fontSize: 11, color: '#9E8697', marginTop: 3, fontWeight: '500' },
-  navTextActive: { color: '#521841', fontWeight: '700' }
+  navTextActive: { color: '#521841', fontWeight: '700' },
 });
